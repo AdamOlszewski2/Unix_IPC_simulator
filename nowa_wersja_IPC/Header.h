@@ -2,11 +2,8 @@
 #include "vector"
 #include "string"
 #include "iostream"
-#include "queue"
 #include "algorithm"
 using namespace std;
-
-enum state { WAITING, READY, RUNNING }; //Stany procesora
 
 class Process;
 class Socket;
@@ -17,209 +14,261 @@ vector<Process*> proc_vec; //Lista wszystkich procesow
 class Process {
 public:
 	string _name;
-	vector<string> recv_send_data;
-	int _state;
 	Process(string name) : _name(name) {}
 	vector<string> recv;
 	vector<string> send;
 };
 
-
 class Socket {
-private:
+public:
+	Socket() {}
 	bool isConnecting = false;
 	bool isListening = false;
+	bool isClient = false;
+	bool canSend = false;
+	int queue = 0;
+	int check = 0;
 	string addr;
-public:
-	Socket() {
-		this->addr = "";
-	}
-	string getAddr() {
-		return this->addr;
-	}
-	void setAddr(string ad) {
-		this->addr = ad;
-	}
-	queue<string> names; //Name of sockets to connect
-	void setListen() {
-		this->isListening = true;
-		this->isConnecting = false;
-	}
-	void setConnect() {
-		this->isListening = false;
-		this->isConnecting = true;
-	}
-	bool getConnect() {
-		if (this->isConnecting == true) return true;
-		else return false;
-	}
-	bool getListen() {
-		if (this->isListening == true) return true;
-		else return false;
-	}
-	//void sendData(Process &toSend, Process &toRecv) {
-	//	for (int i = 0;i != toSend.send.size();i++);
-	//	toRecv.recv.push_back(toSend.send.pop_back);
-	//}
 };
 
-void dodawanieDanychProcesowi(Process &proc) {
-	int packages;
-	cout << "Ile paczek danych?: ";
-	cin >> packages;
-	string data;
-	while (packages != 0) {
-		cout << "Podaj ciag znakow: ";
-		cin >> data;
-		cout << endl;
-		vector<string> vec;
-		proc.send.push_back(data);
-		packages--;
+void addingDataToProcess(Process &proc) {
+	if (any_of(proc_vec.begin(), proc_vec.end(), [&proc](Process* i) {return i->_name == proc._name;})) {
+		int packages;
+		cout << "\tIle paczek danych?: ";
+		cin >> packages;
+		string data;
+		while (packages != 0) {
+			cout << "\tPodaj ciag znakow: ";
+			cin >> data;
+			proc.send.push_back(data);
+			packages--;
+		}
+		cout << "\tDane poprawnie wprowadzone!";
+		mainMenu();
 	}
-	mainMenu();
+	else {
+		cout << "\n\tNie ma procesu o takiej nazwie!";  mainMenu();
+	}
 }
+
 void makeProcess() { //Funkcja tworzaca proces
 	string name;
-	cout << "Podaj nazwe procesu: ";
+	cout << "\n\tPodaj nazwe procesu: ";
 	cin >> name;
+	if (any_of(proc_vec.begin(), proc_vec.end(), [&name](Process *i) { return i->_name == name;})) {
+		cout << "\tTaki proces juz istnieje!" << endl; mainMenu();
+	}
 	Process *proc = new Process(name);
 	proc_vec.push_back(proc);
-	dodawanieDanychProcesowi(*proc);
-	mainMenu();
+	addingDataToProcess(*proc);
 }
 
 void socket() { //Funkcja tworzaca socket
-	//string sockName;
-	//cout << "Podaj adres socketu: ";
-	//cin >> sockName; //Najlepiej nazwa procesu
-	Socket *soc = new Socket();
-	sock_vec.push_back(soc);
-	cout << "Tworzenie socketu zakonczone sukcesem" << endl;
-	mainMenu();
+			Socket *soc = new Socket();
+			sock_vec.push_back(soc);
+			cout << "\tUtworzono gniazdo" << endl;
+			mainMenu();
 }
 
 void bind() {  //Funkcja przypisuje adres do socketu
 	if (sock_vec.empty() == true) {
-		cout << "Brak wolnego socketu - lista socketow pusta" << endl;
+		cout << "\n\tBrak wolnego socketu - lista gniazd pusta" << endl;
 		mainMenu();
 	}
 	string name11;
-	cout << "Podaj adres socketu: "; //Taki sam jak nazwa procesu
+	cout << "\n\tPodaj adres gniazda: "; //Taki sam jak nazwa procesu
 	cin >> name11;
 	for (auto a : sock_vec) {
-		if (a->getAddr() == name11) {
-			cout << "EADDRINUSE - taki adres juz istnieje" << endl;
+		if (a->addr == name11) {
+			cout << "\tTaki adres juz istnieje" << endl;
 			mainMenu();
 		}
 	}
-	if (all_of(sock_vec.begin(), sock_vec.end(), [](Socket *i) { return i->getAddr() != "";})) {
-		cout << "Brak wolnego socketu aby wywolac bind()" << endl;
+	if (all_of(sock_vec.begin(), sock_vec.end(), [](Socket *i) { return i->addr != ""; })) { //Szukanie wolnego socketu
+		cout << "\tBrak wolnego gniazda aby wywolac bind()" << endl;
+		mainMenu();
+	}
+	if (all_of(proc_vec.begin(), proc_vec.end(), [&name11](Process *i) { return i->_name != name11; })) { //Szukanie wolnego socketu
+		cout << "\tBrak okreslonego procesu, nie mozna utworzyc gniazda!" << endl;
 		mainMenu();
 	}
 	for (auto a : sock_vec) {
-		if (a->getAddr() == "") {
-			a->setAddr(name11);
-			cout << "Funkcja bind() dla socketu " << name11 << " zakonczona pomyslnie!";
+		if (a->addr == "") {
+			a->addr = name11;
+			cout << "\tFunkcja bind() zakonczona pomyslnie!";
 			mainMenu();
 		}
 	}
 }
 
 void listen() {
-	string name;
-	cout << "Wpisz adres socketu, ktory ma sluchac (dzialac jako server): ";
+	string name = ""; int q;
+	cout << "\nWpisz adres gniazda, ktory ma sluchac (dzialac jako serwer): ";
 	cin >> name;
+	cout << endl;
+	cout << "\nWpisz wartosc limitu kolejki polaczen przychodzacych: ";
+	cin >> q;
+	cout << endl;
+	for (auto a : sock_vec) {
+		if (a->addr == name && a->isClient == true) {
+			cout << "To gniazdo jest klienckie!" << endl; 
+			mainMenu();
+		}
+	}
 	if (sock_vec.empty()) {
-		cout << "Wektor socketow pusty!" << endl;
+		cout << "\tWektor gniazd pusty!" << endl;
 	}
 	else {
 		for (auto a : sock_vec) {
-			if (a->getAddr() == name && a->getConnect() == false) {
-				a->setListen();
-				cout << "Listen OK"; mainMenu();
+			if (a->addr == name && a->isConnecting == false) {
+				a->isListening = true;
+				a->queue = q;
+				cout << "\tFunkcja listen() zakonczona prawidlowo!"; mainMenu();
 			}
 		}
 	}
+	cout << "\tBrak gniazda gotowego do sluchania!" << endl;
 	mainMenu();
 }
 
 void connect() {
-	string name_client, name_server;
-	cout << "Wpisz nazwe socketu, ktory chcesz wykorzystac jako client: ";
+	string name_client = "", name_server = "";
+	cout << "\n\tWpisz nazwe procesu, ktory chcesz wykorzystac jako klient: ";
 	cin >> name_client;
-	cout << "Wpisz nazwe socketu, do ktorego chcesz przeslac dane (server): ";
+	cout << "\tWpisz nazwe gniazda, od ktorego zadasz danych: ";
 	cin >> name_server;	cout << endl;
 	if (any_of(sock_vec.begin(), sock_vec.end(),
-		[&name_client](Socket *i) { return i->getAddr() == name_client && i->getConnect() == true;})) {
-		cout << "Blad funkcji connect() - socket " << name_client << " juz dziala jako client" << endl;
+		[&name_client](Socket *i) {
+		return i->addr == name_client && (i->isConnecting == true || i->isListening == true); }))
+	{
+		cout << "\tKlient jest juz polaczony lub jest sluchaczem!" << endl;
 		mainMenu();
 	}
-	if (any_of(sock_vec.begin(), sock_vec.end(),
-		[&name_client](Socket *i) { return i->getAddr() == name_client && i->getListen() == true;})) {
-		cout << "Blad funkcji connect() - socket " << name_client << " dziala jako server" << endl;
-		mainMenu();
-	}
-	for (auto a : sock_vec) {
-		if (a->getAddr() == name_server && a->getListen() == true) {
-			a->names.push(name_client);
-			for (auto b : sock_vec) {
-				if (b->getAddr() == name_client) {
-					b->setConnect();
-					cout << "Connect() wywolane pomyslnie!" << endl;
+		for (auto c : sock_vec) {
+			if (c->addr == name_server && c->isListening == true && (c->check < c->queue)) {
+				char yon;
+				cout << "\tCzy " << name_server << " ma zaakceptowac polaczenie? [wywolanie accept() po stronie serwera][T/N]: ";
+				cin >> yon;	cout << endl;
+				if (yon == 'T') {
+					for (auto b : sock_vec) {
+						if (b->addr == "")
+						{
+							b->isConnecting = true; b->isClient = true; b->addr = name_client; break;
+						}
+					}
+					c->check++;
+					cout << "\tConnect() wywolane pomyslnie!" << endl;
+					mainMenu();
 				}
+				else cout << "\tOdrzucono polaczenie!" << endl; mainMenu();
+			}
+			else {
+				cout << "\tBlad funkcji connect() - serwer mogl osiagnac maksymalna ilosc polaczen przychodzacych lub nie istnieje" << endl; mainMenu();
 			}
 		}
-	}
-	mainMenu();
 }
 
 void send() {
 	string procToSend, procToRecv;
-	cout << "Jaki proces ma wyslac dane?: "; cin >> procToSend; cout << endl;
-	cout << "Jaki proces ma odebrac dane?: "; cin >> procToRecv;
-	//find_if(sock_vec.begin(), sock_vec.end(),
-		//[&procToSend](Socket *i) { return i->getAddr() == procToSend && (i->getConnect() == true || i->getListen() == true);});
-	for (auto a : sock_vec) {
-		if (a->getAddr() == procToSend && a->getConnect()) {
-			for (auto a : sock_vec) {
+	cout << "\tKlient: "; cin >> procToSend; cout << endl;
+	cout << "\tSerwer: "; cin >> procToRecv;
+	if (all_of(sock_vec.begin(), sock_vec.end(), [&procToSend](Socket *i) { return i->addr != procToSend; })) { 
+		cout << "\tBrak gniazda klienta()" << endl;
+		mainMenu();
+	}
+	if (all_of(sock_vec.begin(), sock_vec.end(), [&procToRecv](Socket *i) { return i->addr != procToRecv; })) { 
+		cout << "\tBrak gniazda klienta()" << endl;
+		mainMenu();
+	}
+	for (unsigned int i = 0; i < sock_vec.size(); i++) {
+		if ((sock_vec[i]->addr == procToSend && (sock_vec[i]->isConnecting == false)) == true) {
+			cout << "\n\tBrak okreslonego gniazda" << endl; mainMenu();
+		}
+		if ((sock_vec[i]->addr == procToRecv && (sock_vec[i]->isListening == false)) == true) {
+			cout << "\n\tBrak okreslonego gniazda" << endl; mainMenu();
+		}
+	}
+	int recv_pos = -1;
+	int send_pos = -1;
+	for (unsigned i = 0; i < proc_vec.size(); i++) {
+		if (proc_vec[i]->_name == procToRecv) { recv_pos = i; }
+		if (proc_vec[i]->_name == procToSend) { send_pos = i; }
+	}
+	if (recv_pos == -1 || send_pos == -1) {
+		cout << "\n\tBlad funkcji send()!" << endl; mainMenu();
+	}
+	else {
+		proc_vec[recv_pos]->recv.insert(proc_vec[recv_pos]->recv.end(),
+			proc_vec[send_pos]->send.begin(), proc_vec[send_pos]->send.end());
 
+		proc_vec[send_pos]->recv.insert(proc_vec[send_pos]->recv.end(),
+			proc_vec[recv_pos]->send.begin(), proc_vec[recv_pos]->send.end());
+		for (unsigned int i = 0; i < sock_vec.size(); i++) {
+			if (sock_vec[i]->addr == procToSend) {
+				sock_vec[i]->isConnecting = false;
+			}
+			if (sock_vec[i]->addr == procToRecv) {
+				sock_vec[i]->check--;
 			}
 		}
 	}
+	cout << "\n\tFunkcja send() zakonczona pomyslnie!" << endl; mainMenu();
 }
 
-void close() {
-	string name;
-	cout << "Ktory socket chcesz zamknac?: ";
-	cin >> name;
-	for (int i = 0; i != sock_vec.size();i++) {
-		if (sock_vec[i]->getAddr() == name) {
-			delete sock_vec[i];
-			sock_vec.erase(sock_vec.begin() + i);
-			cout << "Funkcja close() wykonana pomyslnie!" << endl;
+
+	void close() {
+		string name;
+		cout << "\n\tKtore gniazdo chcesz zamknac?: ";
+		cin >> name;
+		if (all_of(sock_vec.begin(), sock_vec.end(),
+			[&name](Socket *i) {
+			return i->addr != name; })) {
+			cout << "\n\tBrak gniazda o podanej nazwie" << endl;
+			mainMenu();
+		}
+		else {
+			for (unsigned int i = 0; i < sock_vec.size(); i++) {
+				if (sock_vec[i]->addr == name && sock_vec[i]->isListening == true) {
+					delete sock_vec[i];
+					sock_vec.erase(sock_vec.begin() + i);
+					cout << "\n\tFunkcja close(), a nastepnie unlink() wykonane pomyslnie!" << endl;
+				}
+				else if (sock_vec[i]->addr == name && sock_vec[i]->isClient == true) {
+					delete sock_vec[i];
+					sock_vec.erase(sock_vec.begin() + i);
+					cout << "\n\tFunkcja close() wykonane pomyslnie!" << endl;
+				}
+			}
 			mainMenu();
 		}
 	}
-	cout << "Brak socketu o podanej nazwie" << endl;
-	mainMenu();
-}
+
 
 void mainMenu() {
 	int menu;
-	cout << "\n1: Wypisz wszystkie sockety i adresy do nich przypisane" << endl << "2: Wypisz liste wszystkich procesow" << endl
-		<< "3: Tworzenie nowego procesu" << endl << "4: Tworzenie nowego socketu" << endl << "5: Dodawanie procesowi danych do wyslania" << endl
-		<< "6: bind()" << endl << "7: listen()" << endl << "8: connect()" << endl << "9: send()" << endl;
-	cout << "Wpisz numer: ";
+	cout << "\n\n" << "Wpisz 11 aby wyswietlic spis polecen" << endl << "Wpisz numer: ";
 	cin >> menu;
 	switch (menu) {
+
 	case 1: //	Wypisz wszystkie sockety i adresy do nich przypisane
 		if (sock_vec.empty()) {
-			cout << "Brak socketow" << endl;
+			cout << "\n\tWektor gniazd pusty" << endl;
 			mainMenu();
 		}
 		else {
 			for (auto a : sock_vec) {
-				cout << "Socket: " << a->getAddr() << endl;
+				if (a->addr == "")
+					cout << "\n\tGniazdo: <brak adresu>" << endl;
+				else {
+					cout << "\n\tGniazdo: " << a->addr
+						<< " | Czy sluchacz: " << a->isListening
+						<< " | Czy klient: " << a->isClient
+						<< " | Czy polaczony: " << a->isConnecting;
+					if (a->isListening) {
+						cout << " | Aktywne polaczenia: " << a->check
+							 << " | Limit polaczen: " << a->queue << endl;
+					}
+				}
 			}
 			mainMenu();
 		}
@@ -227,50 +276,67 @@ void mainMenu() {
 	case 2: //Wypisz liste wszystkich procesow
 	{
 		if (proc_vec.empty()) {
-			cout << "Brak procesow" << endl;
+			cout << "\n\tBrak procesow" << endl;
 			mainMenu();
 		}
 		else {
 			for (auto a : proc_vec) {
-				cout << "Proces: " << a->_name << ", stan: " << a->_state << endl;
+				cout << "\tProces: " << a->_name  << endl << "\tDane tablicy recv: ";
+				for (int i = 0;i != a->recv.size();i++) {
+					cout << a->recv[i] << " ";
+				}
+				cout << endl << "\tDane tablicy send: ";
+				for (int i = 0;i != a->send.size();i++) {
+					cout << a->send[i] << " ";
+				}
+				cout << "\n\n";
 			}
 			mainMenu();
 		}
 		break;
 	}
-	case 3: //Tworzenie nowego procesu
-		makeProcess();
+	case 3://Dodawanie procesowi danych do wyslania
+	{
+		string name;
+		cout << "\n\tPodaj nazwe procesu, ktoremu chcesz przypisac dane: ";
+		cin >> name;
+		for (auto a : proc_vec) {
+			if (a->_name == name) {
+				addingDataToProcess(*a);
+			}
+		}
+		cout << "\tBrak takiego procesu!" << endl;
+		mainMenu();
 		break;
-	case 4:  //Tworzenie nowego socketu
+	}
+	case 4:   //Tworzenie nowego procesu
+	makeProcess();
+	break;
+	case 5: //Tworzenie nowego socketu
 		socket();
 		break;
-	case 5: //Dodawanie procesowi danych do wyslani
-	{string name;
-	cout << "Podaj nazwe procesu, ktoremu chcesz przypisac dane: ";
-	cin >> name;
-	for (auto a : proc_vec) {
-		if (a->_name == name) {
-			dodawanieDanychProcesowi(*a);
-		}
-		else { cout << endl << "Brak procesu o podanej nazwie"; mainMenu(); }
-	}
-	break;
-	}
-	case 6: //Wywolanie bind()
+	case 6: 
 		bind();
-		 break;
-		case 7: //Wywolanie listen()
-			listen();
-			break;
-		case 8:
-			connect(); 
-			break;
-		case 9:
-			send();
-		case 10:
-			close();
-			break;
-	default: mainMenu(); 
+		break;
+	case 7: 
+		listen();
+		break;
+	case 8:
+		connect(); 
+		break;
+	case 9:
+		send();
+		break;
+	case 10:
+		close();
+		break;
+	case 11:
+		cout << "Spis polecen:" << endl << "1: Wypisz wszystkie gniazda i ich adresy" << endl << "2: Wypisz liste wszystkich procesow i ich tablice danych" << endl
+			<< "3: Dodawanie procesowi danych do wyslania " << endl << "4: Tworzenie nowego procesu" << endl << "5: socket()" << endl
+			<< "6: bind()" << endl << "7: listen()" << endl << "8: connect() / accept()" << endl << "9: send()" << endl << "10: close() / unlink()" << "\n";
+		mainMenu();
+		break;
+	default: mainMenu();
 		break;
 	}
 }
